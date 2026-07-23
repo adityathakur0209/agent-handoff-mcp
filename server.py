@@ -6,7 +6,7 @@ import requests
 
 load_dotenv()
 
-mcp = FastMCP("Backstory MCP")
+mcp = FastMCP("Agent Handoff MCP")
 
 
 @mcp.tool()
@@ -44,15 +44,13 @@ def publish_account_handoff(
     }
 
     try:
-
         response = requests.post(
             flow_url,
             json=payload,
             timeout=120
         )
 
-        # Power Automate currently uploads successfully but may
-        # return a 504 because the HTTP client times out waiting.
+        # Power Automate may return 504 even if the upload succeeds.
         success = response.status_code in [200, 202, 504]
 
         return {
@@ -63,7 +61,6 @@ def publish_account_handoff(
         }
 
     except Exception as e:
-
         return {
             "success": False,
             "error": str(e)
