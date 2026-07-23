@@ -1,11 +1,8 @@
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 
-from pathlib import Path
-from datetime import datetime
 import os
 import requests
-import time
 
 load_dotenv()
 
@@ -28,76 +25,49 @@ def publish_account_handoff(
     metadata: dict
 ):
     """
-    Saves the generated HTML into the OneDrive synced folder
-    and triggers the Power Automate flow.
+    Sends the generated HTML directly to Power Automate,
+    which uploads it into Salesforce.
     """
 
-    one_drive_folder = os.getenv("ONEDRIVE_FOLDER")
     flow_url = os.getenv("POWER_AUTOMATE_URL")
 
-    if not one_drive_folder:
-        raise Exception("ONEDRIVE_FOLDER not configured in .env")
-
-    folder_path = Path(one_drive_folder)
-    folder_path.mkdir(parents=True, exist_ok=True)
+    if not flow_url:
+        raise Exception("POWER_AUTOMATE_URL not configured in .env")
 
     account_name = metadata.get("account_name", "Unknown").replace("/", "-")
+    filename = f"{account_name}_Handoff.html"
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    payload = {
+        "html": html,
+        "file_name": filename,
+        "metadata": metadata
+    }
 
-    filename = f"{account_name}_{timestamp}.html"
+    try:
 
-    file_path = folder_path / filename
+        response = requests.post(
+            flow_url,
+            json=payload,
+            timeout=120
+        )
 
-    file_path.write_text(
-        html,
-        encoding="utf-8"
-    )
+        # Power Automate currently uploads successfully but may
+        # return a 504 because the HTTP client times out waiting.
+        success = response.status_code in [200, 202, 504]
 
-    # Give OneDrive a few seconds to sync
-    time.sleep(5)
-
-    folder_name = folder_path.name
-
-    flow_triggered = False
-    flow_response_status = None
-    flow_response_body = None
-
-    if flow_url:
-
-        payload = {
-            "file_name": filename,
-            "folder": folder_name,
-            "metadata": metadata
+        return {
+            "success": success,
+            "status_code": response.status_code,
+            "response": response.text,
+            "file_name": filename
         }
 
-        try:
+    except Exception as e:
 
-            response = requests.post(
-                flow_url,
-                json=payload,
-                timeout=60
-            )
-
-            flow_response_status = response.status_code
-            flow_response_body = response.text
-
-            if response.ok:
-                flow_triggered = True
-
-        except Exception as e:
-
-            flow_response_body = str(e)
-
-    return {
-        "success": True,
-        "file_name": filename,
-        "folder": folder_name,
-        "flow_triggered": flow_triggered,
-        "flow_response_status": flow_response_status,
-        "flow_response_body": flow_response_body,
-        "file_path": str(file_path)
-    }
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 if __name__ == "__main__":
