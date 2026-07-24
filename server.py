@@ -6,7 +6,11 @@ import requests
 
 load_dotenv()
 
-mcp = FastMCP("Agent Handoff MCP")
+mcp = FastMCP(
+    "Agent Handoff MCP",
+    host="0.0.0.0",
+    port=8000
+)
 
 
 @mcp.tool()
